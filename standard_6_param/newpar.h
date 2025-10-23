@@ -40,7 +40,7 @@ int param_iface(int mid, double task[], double* cl_tt, double* cl_te, double* cl
 {
     // --- Define CAMB settings ---
     int l_max = 2700; // Maximum multipole. Must match `l_max_scalar` in .ini
-    double scale_in = 7.4311e12; // Dummy value. Scaling is now correctly handled by `CMB_outputscale` in the .ini file.
+    double scale_in = 7.4311e12; 
 
     /*// --- Allocate memory for the output Cl arrays ---
     // Using malloc is thread-safe for MPI, as seen in `test_camb_2.c`.
