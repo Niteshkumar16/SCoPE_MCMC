@@ -120,8 +120,6 @@ contains
       cl_bb(l+1) = CAMB_Out%CLData%CL_lensed(l, IDX_BB) * scale_in
     end do
     
-    ! Fortran automatically cleans up local variables like CAMB_Out on exit.
-    ! This prevents the "double free" error you saw in the logs.
 
   end subroutine camb_from_params_
 
