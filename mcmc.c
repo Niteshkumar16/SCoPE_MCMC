@@ -14,6 +14,7 @@
 // ---------------------------------------------------------------------
 
 #define NOPARAM 20             // The number of parameters in our model
+#define NUM_SLOW 6              // The number of "slow" parameters, i.e. parameters that require a call to CAMB
 #define MAX_TASKARRAY_SIZE 150 // this is the maximum task array size
 #define NR_END 1              // Numerical Recipr function
 #define FREE_ARG char *
@@ -422,7 +423,7 @@ int throwDice(Task chain, Task *next, MultiGaussian *MG, int scale)
 
   generateRandom(MG);
 
-  int NUM_SLOW = 6; // Your 6 CAMB cosmological parameters
+  // int NUM_SLOW = 6; // Your 6 CAMB cosmological parameters
   
   // 1. Propose steps for SLOW parameters only
   for (unsigned int i = 0; i < NUM_SLOW; i++)
@@ -446,7 +447,7 @@ int throwDice(Task chain, Task *next, MultiGaussian *MG, int scale)
   }
 
   // Bounds checking
-  for (unsigned int i = 0; i < PARAMETERS; i++)
+  for (unsigned int i = 0; i < NUM_SLOW; i++)
   {
     if (next->f[i] < MG->lbounds[i]) return 0;
     if (next->f[i] > MG->hbounds[i]) return 0;
@@ -606,9 +607,9 @@ unsigned int chainSize[CHAINS];
   for (unsigned int ii = 0; ii < CHAINS; ii++)
   {
     sigma[ii] = new_double(TASKARRAY_SIZE);
-    covMatrix[ii] = (double **)malloc(PARAMETERS * sizeof(double *));
-    for (unsigned int jj = 0; jj < PARAMETERS; jj++)
-      covMatrix[ii][jj] = (double *)malloc(PARAMETERS * sizeof(double));
+    covMatrix[ii] = (double **)malloc(NUM_SLOW * sizeof(double *));
+    for (unsigned int jj = 0; jj < NUM_SLOW; jj++)
+      covMatrix[ii][jj] = (double *)malloc(NUM_SLOW * sizeof(double));
   }
 
   Task *next[CHAINS];
@@ -643,14 +644,14 @@ unsigned int chainSize[CHAINS];
   B = new_double(PARAMETERS);
   W = new_double(PARAMETERS);
   R = new_double(PARAMETERS);
-  average = new_double(PARAMETERS);
+  average = new_double(NUM_SLOW); //================================ we only monitor the slow parameters for convergence===========================
 
   for (unsigned int ii = 0; ii < CHAINS; ii++)
     y[ii] = new_double(PARAMETERS);
 
-  cov = (double **)malloc(PARAMETERS * sizeof(double *));
-  for (unsigned int ii = 0; ii < PARAMETERS; ii++)
-    cov[ii] = new_double(PARAMETERS);
+  cov = (double **)malloc(NUM_SLOW * sizeof(double *));
+  for (unsigned int ii = 0; ii < NUM_SLOW; ii++)
+    cov[ii] = new_double(NUM_SLOW);
 
   // set the (flat) priors, i.e. parameter boundaries FROM CONFIG
   //------------------------------------------------------------------
@@ -668,7 +669,7 @@ unsigned int chainSize[CHAINS];
     for (unsigned int k = 0; k < TASKARRAY_SIZE; k++)
       t.f[k] = 0; // for safety reasons, initialize (otherwise garbage in first line)
 
-    mGauss[i] = new_MultiGaussian(PARAMETERS);
+    mGauss[i] = new_MultiGaussian(NUM_SLOW); // ============================we only sample the slow parameters from the multivariate gaussian, the fast parameters will be dragged by the slave============================================
     MultiGaussian_setBounds(mGauss[i], lowbound, highbound);
 
     // Generate Starting points (inside the prior)
@@ -686,12 +687,12 @@ unsigned int chainSize[CHAINS];
     
     // the sigmas from config
     //----------------------------------------------------------------------------------------------
-    for (unsigned int j = 0; j < PARAMETERS; j++) {
+    for (unsigned int j = 0; j < NUM_SLOW; j++) {
         sigma[i][j] = initial_sigma[j];
     }
 
-    for (unsigned int k = 0; k < PARAMETERS; k++) // fill with sigmas
-      for (unsigned int j = 0; j < PARAMETERS; j++)
+    for (unsigned int k = 0; k < NUM_SLOW; k++) // fill with sigmas
+      for (unsigned int j = 0; j < NUM_SLOW; j++)
       {
         if (j == k)
           covMatrix[i][j][j] = sigma[i][j] * sigma[i][j];
@@ -998,10 +999,10 @@ unsigned int chainSize[CHAINS];
         //
         // Initialize
         // --------------------------------------------------------------------------
-        for (unsigned int k = 0; k < PARAMETERS; k++)
+        for (unsigned int k = 0; k < NUM_SLOW; k++)
         {
           average[k] = 0.0;
-          for (unsigned int j = 0; j < PARAMETERS; j++)
+          for (unsigned int j = 0; j < NUM_SLOW; j++)
             cov[k][j] = 0.0;
         }
 
@@ -1009,13 +1010,13 @@ unsigned int chainSize[CHAINS];
         {
           for (unsigned int n = (chainSize[i] - covSize[ii]); n < chainSize[i]; n++)
           {
-            for (unsigned int k = 0; k < PARAMETERS; k++)
-              average[k] += chain[ii][n].f[k] * chain[ii][n].Multiplicity;
+            for (unsigned int k = 0; k < NUM_SLOW; k++)
+              average[k] += chain[ii][n].f[k] * chain[ii][n].Multiplicity;  
             TotalSize += chain[ii][n].Multiplicity; // total weight of all points
           }
         }
 
-        for (unsigned int k = 0; k < PARAMETERS; k++) // normalize
+        for (unsigned int k = 0; k < NUM_SLOW; k++) // normalize
         {
           average[k] = average[k] / ((double)TotalSize);
         }
@@ -1023,23 +1024,23 @@ unsigned int chainSize[CHAINS];
         {
           for (unsigned int n = chainSize[ii] - covSize[ii]; n < chainSize[ii]; n++)
           { // run over all points
-            for (unsigned int k = 0; k < PARAMETERS; k++)
-              for (unsigned int j = 0; j < PARAMETERS; j++)
+            for (unsigned int k = 0; k < NUM_SLOW; k++)
+              for (unsigned int j = 0; j < NUM_SLOW; j++)
                 cov[k][j] += (chain[ii][n].f[k] - average[k]) * (chain[ii][n].f[j] - average[j]) * chain[ii][n].Multiplicity;
           }
         }
 
-        for (unsigned int k = 0; k < PARAMETERS; k++) // normalize
+        for (unsigned int k = 0; k < NUM_SLOW; k++) // normalize
         {
-          for (unsigned int j = 0; j < PARAMETERS; j++)
+          for (unsigned int j = 0; j < NUM_SLOW; j++)
           {
             cov[k][j] /= (TotalSize - 1.0);
           }
         }
 
         for (unsigned int ii = 0; ii < CHAINS; ii++)
-          for (unsigned int k = 0; k < PARAMETERS; k++)
-            for (unsigned int j = 0; j < PARAMETERS; j++)
+          for (unsigned int k = 0; k < NUM_SLOW; k++)
+            for (unsigned int j = 0; j < NUM_SLOW; j++)
               covMatrix[ii][k][j] = cov[k][j];
 
         for (unsigned int ii = 0; ii < CHAINS; ii++)
@@ -1051,9 +1052,9 @@ unsigned int chainSize[CHAINS];
         // output information, in text file as well as binary format for re-starting
         fprintf(covarianceMatrices, "Chain: %d Step: %d Points used: %d\n", i + 1, chainSize[i], covSize);
 
-        for (unsigned int j = 0; j < PARAMETERS; j++)
+        for (unsigned int j = 0; j < NUM_SLOW; j++)
         {
-          for (unsigned int k = 0; k < PARAMETERS; k++)
+          for (unsigned int k = 0; k < NUM_SLOW; k++)
             fprintf(covarianceMatrices, "%e  ", cov[j][k]);
           fprintf(covarianceMatrices, "\n");
         }
@@ -1188,7 +1189,7 @@ unsigned int chainSize[CHAINS];
         if (FREEZE_IN == 1 && min_size > MIN_SIZE_FOR_FREEZE_IN)
         {
           unsigned short int ConvergenceReached = 1;
-          for (unsigned int m = 0; m < PARAMETERS; m++)
+          for (unsigned int m = 0; m < NUM_SLOW; m++)
             if (R[m] > RBREAK)
               ConvergenceReached = 0;
 
@@ -1410,40 +1411,49 @@ int slave(int rank)
       
       // --- THE PRIOR WALL CHECK ---
       // If param_iface returns 1, it's good. If it returns 0 (NaN) or -1 (Prior Wall), it fails.
+      // --- THE PRIOR WALL CHECK ---
       if(magicnum1 > 0 && magic_old > 0) {
           
-          int n_fast = PARAMETERS - 6; // Number of nuisance parameters (e.g., 20 - 6 = 14)
-          int n_steps = 20; // The dragging steps 
-          double walk_scale = 1.0/sqrt((double)n_steps); // The scale factor for the random walk
+          int n_fast = PARAMETERS - 6; 
+          int n_steps = 20; 
+          double walk_scale = 1.0/sqrt((double)n_steps); 
           double current_fast[50];
           
           for(int j = 0; j < n_fast; j++) current_fast[j] = task[6 + j];
 
-          // Initial Likelihoods (Note: run_plc returns chi2, so log-likelihood = -0.5 * chi2)
+          // Initial Likelihoods 
           double lnL_old_curr = -0.5 * run_plc(rank, task_old, Old_Cl_TT, Old_Cl_TE, Old_Cl_EE, Old_Cl_BB);
           double lnL_new_curr = -0.5 * run_plc(rank, task, Cl_TT, Cl_TE, Cl_EE, Cl_BB);
 
-// --- 2. THE DRAGGING LOOP (FAST STEP) ---
+          //Track starting likelihood and accumulate the dragging weight
+          double lnL_old_start = lnL_old_curr;
+          double log_weight_sum = 0.0;
+          log_weight_sum += (lnL_new_curr - lnL_old_curr) / n_steps; 
+
+          // --- 2. THE DRAGGING LOOP (FAST STEP) ---
           for(int i = 1; i < n_steps; i++) {
               double prop_fast[50];
-              int out_of_bounds_fast = 0; // NEW: Track fast boundary violations
+              int out_of_bounds_fast = 0; 
               
               // Propose a random walk in the fast subspace
               for(int j = 0; j < n_fast; j++) {
                   prop_fast[j] = current_fast[j] + gasdev(0.0, dummy_sig[6 + j]*walk_scale );
                   
-                  // >>> NEW: The Fast Parameter Prior Wall <<<
                   if (prop_fast[j] < lbound[6 + j] || prop_fast[j] > hbound[6 + j]) {
                       out_of_bounds_fast = 1;
                   }
-
-                  task_old[6 + j] = prop_fast[j];
-                  task[6 + j] = prop_fast[j];
               }
 
-              // >>> NEW: Reject the step immediately if it wanders out of bounds <<<
               if (out_of_bounds_fast) {
+                  // We still must accumulate the weight of staying in place!
+                  log_weight_sum += (lnL_new_curr - lnL_old_curr) / n_steps;
                   continue; 
+              }
+
+              //Only modify the task arrays if bounds are safe
+              for(int j = 0; j < n_fast; j++) {
+                  task_old[6 + j] = prop_fast[j];
+                  task[6 + j] = prop_fast[j];
               }
 
               // Evaluate Likelihoods for proposed fast step using Planck
@@ -1459,7 +1469,16 @@ int slave(int rank)
                   for(int j = 0; j < n_fast; j++) current_fast[j] = prop_fast[j];
                   lnL_old_curr = lnL_old_prop;
                   lnL_new_curr = lnL_new_prop;
+              } else {
+                  // Revert the task arrays if the step is rejected
+                  for(int j = 0; j < n_fast; j++) {
+                      task_old[6 + j] = current_fast[j];
+                      task[6 + j] = current_fast[j];
+                  }
               }
+
+              // Accumulate weight for the overall slow step
+              log_weight_sum += (lnL_new_curr - lnL_old_curr) / n_steps;
           }
 
           // --- 3. FINALIZE ---
@@ -1467,11 +1486,11 @@ int slave(int rank)
               task[6 + j] = current_fast[j];
           }
           
-          Chi2X = run_plc(rank, task, Cl_TT, Cl_TE, Cl_EE, Cl_BB);
+        
+          // When the master evaluates exp(0.5*(newss - loglike)), it will perfectly equal exp(log_weight_sum).
+          Chi2X = -(2.0 * lnL_old_start + 2.0 * log_weight_sum);
           
       } else {
-          // If magicnum1 or magic_old was 0 or -1, they hit the prior wall or failed in CAMB.
-          // Assign a terrible Chi2 so the master rejects this proposed step.
           Chi2X = 10.0e10; 
       }
       
